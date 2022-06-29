@@ -3,7 +3,7 @@
 
 """ 
 #############################################################################################################
-#  Andrea Favero, 14 June 2022
+#  Andrea Favero, 25 June 2022
 #
 #
 #  This code relates to CUBOTino autonomous, a very small and simple Rubik's cube solver robot 3D printed.
@@ -883,7 +883,8 @@ def show_cv_wow(cube, time=2000):
     if save_images:                                             # case the save_image is True
         folder = os.path.join('.','cv_wow_pictures')            # folder to store the cv_wow pictures
         if not os.path.exists(folder):                          # if case the folder does not exist
-            os.makedirs(folder)                                 # folder is made if it doesn't exist
+            os.umask(0)                                         # no privileges initially revoked
+            os.makedirs(folder, mode=0o777)                     # folder is made if it doesn't exist
         datetime = dt.datetime.now().strftime('%Y%m%d_%H%M%S')  # date_time variable is assigned, for file name
         for i, image in enumerate(('Pre_warp', 'After_warp', 'Gray', 'Blurred', 'Canny', 'Dilated', 'Eroded', 'Cube')):
             if side == 1 and i == 0:                                       # case for first image to save
@@ -1613,9 +1614,7 @@ def cube_colors_interpr_HSV(BGR_detected, HSV_detected):
     if HSV_analysis==False:      # case the HSV_analysis is false
         cube_status_URFDLB={}    # an empty dict is assigned to the cube_status_URFDLB variable
         cube_status_detected={}  # an empty dict is assigned to the cube_status_detected variable
-    
-    print('cube_status_URFDLB at row 1339',cube_status_URFDLB)   # feedback is printed to the terminal
-    
+        
     # cube_status_URFDLB uses 'conventional color sequence' (URFDLB being White Red Green Yellow Orange Blue), convenient to later build the cube_status
     # cube_status_detected has the detected colors, via the HSV approach. This dict is used for decoration purpose
     return cube_status_URFDLB, cube_status_detected, cube_color_sequence
@@ -1877,7 +1876,8 @@ def decoration(deco_info):
 
     folder = os.path.join('.','CubesStatusPictures')     # folder to store the collage pictures
     if not os.path.exists(folder):                       # if case the folder does not exist
-        os.makedirs(folder)                              # folder is made if it doesn't exist
+        os.umask(0)                                      # no privileges initially revoked
+        os.makedirs(folder, mode=0o777)                  # folder is made if it doesn't exist
     fname = folder+'/cube_collage'+timestamp+'.png'      # folder+filename with timestamp for the resume picture
     status=cv2.imwrite(fname, collage)                   # cube sketch with detected and interpred colors is saved as image
     
@@ -2456,7 +2456,8 @@ def log_data(timestamp, facelets_data, cube_status_string, solution, color_detec
     
     folder = os.path.join('.','CubesDataLog')           # folder to store the relevant cube data
     if not os.path.exists(folder):                      # if case the folder does not exist
-        os.makedirs(folder)                             # folder is made if it doesn't exist
+        os.umask(0)                                     # no privileges initially revoked
+        os.makedirs(folder, mode=0o777)                 # folder is made if it doesn't exist
     
     fname = folder+'/Cubotino_solver_log.txt'           # folder+filename for the cube data
     if not os.path.exists(fname):                       # if case the file does not exist, file with headers is generated
@@ -2476,7 +2477,8 @@ def log_data(timestamp, facelets_data, cube_status_string, solution, color_detec
         s = a+'\t'+b+'\t'+c+'\t'+d+'\t'+e+'\t'+f+'\t'+g+'\t'+h+'\t'+i+'\t'+k+'\n'  # tab separated string of the the headers
         
         # 'a'means: file will be generated if it does not exist, and data will be appended at the end
-        with open(fname,'a') as f:    
+        os.umask(0)
+        with open(os.open(fname, os.O_CREAT | os.O_WRONLY, 0o777),'w') as f:    
             f.write(s)       
 
     
@@ -2494,7 +2496,7 @@ def log_data(timestamp, facelets_data, cube_status_string, solution, color_detec
     k=str(solution)                                                    # solution returned by Kociemba solver
     s = a+'\t'+b+'\t'+c+'\t'+d+'\t'+e+'\t'+f+'\t'+g+'\t'+h+'\t'+i+'\t'+k+'\n'      # tab separated string with info to log
     
-    # 'a'means: file will be generated if it does not exist, and data will be appended at the end
+    # 'a'means: data will be appended at the end
     with open(fname,'a') as f:   # text file is temporary opened
         f.write(s)               # data is appended
 
@@ -2647,6 +2649,7 @@ def time_system_synchr():
     
     if internet:                                        # case internet is available
         from subprocess import Popen, PIPE              # classes importing
+        date_time = dt.datetime.now().strftime('%d/%m/%Y %H:%M:%S') # date_time variable is assigned
         once = True                                     # variable once is set true, to print a feedback only once
         i = 0                                           # iterator
         while True:                                     # infinite loop              
@@ -2661,8 +2664,9 @@ def time_system_synchr():
                 ps.wait()                                        # waits until the ps child completes
                 
                 if b'yes' in output:                             # case the timedatectl status returns true
-                    print('time system is synchronized')         # feedback is printed to the terminal
-                    show_on_display('TIME SYSTEM','UPDATED', fs1=16, sleep=1.5)   # feedback is printe to the display
+                    print('time system is synchronized: ',date_time)  # feedback is printed to the terminal
+                    show_on_display('TIME SYSTEM','UPDATED', fs1=16, sleep=1.5)   # feedback is printed to the display
+                    show_on_display(str(date_time[:10]), str(date_time[11:]), fs1=20, fs2=26, sleep=1.5)
                     break                                        # while loop is interrupted
                 else:                                            # case the timedatectl status returns false
                     if once:                                     # case the variable once is true
@@ -2811,8 +2815,8 @@ def start_up(first_cycle=False):
     if first_cycle:
         time_system_synchr()  # checks the time system status (if internet connected, it waits till synchronization)
 #         cam_led_bright = 0.1           #(AF 0.1)           # set the brighteness on the led at top_cover (admitted 0 to 0.3)
-#         detect_timeout = 40             #(AF 40)            # timeout for the cube status detection (in secs)
-#         show_time = 7                      #(AF 7)             # showing time of the unfolded cube images (cube initial status)
+#         detect_timeout = 40            #(AF 40)            # timeout for the cube status detection (in secs)
+#         show_time = 7                  #(AF 7)             # showing time of the unfolded cube images (cube initial status)
         
         if cv_wow:                                             # case the cv image analysis plot is set true
             detect_timeout = 2 * detect_timeout                # cube status detection timeout is doubled
