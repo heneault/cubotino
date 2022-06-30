@@ -3,7 +3,7 @@
 
 """
 #############################################################################################################
-# Andrea Favero 06 June 2022
+# Andrea Favero 30 June 2022
 #
 # This script relates to CUBOTino autonomous, a very small and simple Rubik's cube solver robot 3D printed
 # CUBOTino autonomous is the 'Top version', of the CUBOTino versions
@@ -119,7 +119,13 @@ def init_servo(print_out=s_debug):
         if os.path.exists(fname):                                        # case the servo_settings file exists
             with open(fname, "r") as f:                                  # servo_settings file is opened in reading mode
                 servo_settings = json.load(f)                            # json file is parsed to a local dict variable
-
+                # NOTE: in case of git pull, the settings file will be overwritten, the backup file not
+            
+            backup_fname = os.path.join(folder,'Cubotino_T_servo_settings_backup.txt')     # folder and file name for the settings backup
+            with open(backup_fname, 'w') as f:                           # servo_settings_backup file is opened in writing mode
+                f.write(json.dumps(servo_settings, indent=0))            # content of the setting file is saved in another file, as backup
+                # NOTE: in case of git pull, the settings file will be overwritten, the backup file not
+            
             try:
                 t_min_pulse_width = float(servo_settings['t_min_pulse_width'])        # defines the min Pulse With the top servo reacts to
                 t_max_pulse_width = float(servo_settings['t_max_pulse_width'])        # defines the max Pulse With the top servo reacts to
@@ -144,6 +150,7 @@ def init_servo(print_out=s_debug):
                 b_rotate_time = float(servo_settings['b_rotate_time'])                # time for Cube_holder to rotate 90 deg (cube constrained)
                 b_rel_time = float(servo_settings['b_rel_time'])                      # time for Cube_holder to release tension at home, CCW and CW positions
             
+                
             except:   # exception will be raised if json keys differs, or parameters cannot be converted to float
                 print('error on converting to float the imported parameters')   # feedback is printed to the terminal                                  
                 return robot_init_status                                        # return robot_init_status variable, that is False

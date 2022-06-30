@@ -3,7 +3,7 @@
 
 """ 
 #############################################################################################################
-#  Andrea Favero, 25 June 2022
+#  Andrea Favero, 30 June 2022
 #
 #
 #  This code relates to CUBOTino autonomous, a very small and simple Rubik's cube solver robot 3D printed.
@@ -58,8 +58,19 @@ def import_parameters():
     if os.path.exists(fname):                                     # case the settings file exists
         with open(fname, "r") as f:                               # settings file is opened in reading mode
             settings = json.load(f)                               # json file is parsed to a local dict variable
+            # NOTE: in case of git pull, the settings file will be overwritten, the backup file not
+        
         if debug:                                                 # case debug variable is set true on __main_
             print('\nimported parameters: ', settings, '\n')      # feedback is printed to the terminal
+            
+        backup_fname = os.path.join(folder,'Cubotino_T_settings_backup.txt')     # folder and file name for the settings backup
+        with open(backup_fname, 'w') as f:                        # settings_backup file is opened in writing mode
+            f.write(json.dumps(settings, indent=0))               # content of the setting file is saved in another file, as backup
+            # NOTE: in case of git pull, the settings file will be overwritten, the backup file not
+        
+        if debug:                                                 # case debug variable is set true on __main_
+            print('\nimported parameters are saved to the backup file\n') # feedback is printed to the terminal
+
 
         try:
             camera_width_res = int(settings['camera_width_res'])      # Picamera resolution on width 
@@ -883,8 +894,7 @@ def show_cv_wow(cube, time=2000):
     if save_images:                                             # case the save_image is True
         folder = os.path.join('.','cv_wow_pictures')            # folder to store the cv_wow pictures
         if not os.path.exists(folder):                          # if case the folder does not exist
-            os.umask(0)                                         # no privileges initially revoked
-            os.makedirs(folder, mode=0o777)                     # folder is made if it doesn't exist
+            os.makedirs(folder)                                 # folder is made if it doesn't exist
         datetime = dt.datetime.now().strftime('%Y%m%d_%H%M%S')  # date_time variable is assigned, for file name
         for i, image in enumerate(('Pre_warp', 'After_warp', 'Gray', 'Blurred', 'Canny', 'Dilated', 'Eroded', 'Cube')):
             if side == 1 and i == 0:                                       # case for first image to save
@@ -1354,7 +1364,7 @@ def cube_colors_interpr(BGR_detected):
     if debug:                                                   # case debug variable is set true on __main__
         print(f'\nCube_color_sequence: {cube_color_sequence}')  # feedback is printed to the terminal
     
-    return cube_status, HSV_detected, cube_color_sequence
+    return cube_status, HSV_detected, cube_color_sequence, HSV_analysis
 
 
 
@@ -1429,6 +1439,10 @@ def retrieve_cube_color_order(VS_value,Hue):
         HSV_analysis=False                    # analysis according to HSV is set False
         if debug:                             # case debug variable is set true on __main__
             print(f'\nIssue with the orange_center')   # feedback is printed to the terminal
+
+################ DEBUG  #########
+#     HSV_analysis=False    # uncoment this row to force an error on the 6 center facelets color detection
+#################################
     
     if HSV_analysis==True:                        # case the HSV_analysis is true
         # last two colors are blue and green, wherein blue has the highest Hue
@@ -1865,19 +1879,20 @@ def decoration(deco_info):
     faces = deco_info[3]
     cube_status = deco_info[4]
     cube_color_sequence = deco_info[5]
-    URFDLB_facelets_BGR_mean = deco_info[6]
-    color_detection_winner = deco_info[7]
-    show_time = deco_info[8]
-    timestamp = deco_info[9]
+    HSV_analysis = deco_info[6]
+    cube_status_string = deco_info[7]
+    URFDLB_facelets_BGR_mean = deco_info[8]
+    color_detection_winner = deco_info[9]
+    show_time = deco_info[10]
+    timestamp = deco_info[11]
 
     # collage function is called
-    collage=faces_collage(faces, cube_status, color_detection_winner, cube_color_sequence,\
+    collage=faces_collage(faces, cube_status, color_detection_winner, cube_color_sequence, HSV_analysis, cube_status_string, \
                           URFDLB_facelets_BGR_mean, font, fontScale, lineType)   # call the function that makes the pictures collage
 
     folder = os.path.join('.','CubesStatusPictures')     # folder to store the collage pictures
     if not os.path.exists(folder):                       # if case the folder does not exist
-        os.umask(0)                                      # no privileges initially revoked
-        os.makedirs(folder, mode=0o777)                  # folder is made if it doesn't exist
+        os.makedirs(folder)                              # folder is made if it doesn't exist
     fname = folder+'/cube_collage'+timestamp+'.png'      # folder+filename with timestamp for the resume picture
     status=cv2.imwrite(fname, collage)                   # cube sketch with detected and interpred colors is saved as image
     
@@ -1897,7 +1912,9 @@ def decoration(deco_info):
 
 
 
-def faces_collage(faces, cube_status, color_detection_winner, cube_color_sequence, URFDLB_facelets_BGR_mean, font, fontScale, lineType):
+
+def faces_collage(faces, cube_status, color_detection_winner, cube_color_sequence, HSV_analysis, cube_status_string, \
+                  URFDLB_facelets_BGR_mean, font, fontScale, lineType):
     """ This function merges multipe pictures, and it returns the unfolded cube single image.
     The 6 cube faces images, taken while detecting the facelets colors, are used for this collage
     The 6 cube faces images are resized to a predefined dimension
@@ -1939,7 +1956,8 @@ def faces_collage(faces, cube_status, color_detection_winner, cube_color_sequenc
     
     # adds a sketch with interpreted colors (bright) on the collage
     plot_interpreted_colors(cube_status, color_detection_winner, cube_color_sequence, \
-                            collage, collage_w, collage_h, font, fontScale, lineType)     # call the function that updates the cube sketch 
+                            HSV_analysis, cube_status_string, collage, collage_w, collage_h, \
+                            font, fontScale, lineType)     # call the function that updates the cube sketch 
     
     return collage
 
@@ -1999,7 +2017,7 @@ def inner_square_points(square_dict,i,edge):
 
 
 
-def plot_interpreted_colors(cube_status, detect_winner, cube_color_sequence, \
+def plot_interpreted_colors(cube_status, detect_winner, cube_color_sequence, HSV_analysis, cube_status_string, \
                             collage, collage_w, collage_h, font, fontScale, lineType):
     """ Based on the detected cube status, a sketch of the cube is plot with bright colors on the pictures collage."""
     
@@ -2022,16 +2040,17 @@ def plot_interpreted_colors(cube_status, detect_winner, cube_color_sequence, \
                           'yellow':(0,245,245), 'orange':(0,128,255), 'blue':(204,0,0)}   # bright colors assigned to the six faces colors
     std_color_sequence = list(cube_bright_colors.keys())                                  # URFDLB color order if white on top and red at right
     
-    i=0
-    for color in cube_status.values():                               # iteration over the 54 facelets interpreted colors
-        col=cube_color_sequence[std_color_sequence.index(color)]     # from standard color sequence to the one detected, due to cube orientation at start
-        B,G,R = cube_bright_colors[col]                              # BGR values of the bright colors for the corresponding detected color
-        start_point=square_dict[i]                                   # top-left point coordinate for the facelet square
+    for i, color in enumerate(cube_status.values()):                     # iteration over the 54 facelets interpreted colors
+        start_point=square_dict[i]                                       # top-left point coordinate for the facelet square
         cv2.rectangle(collage, tuple(start_point), (start_point[0]+d, start_point[1]+d), (0, 0, 0), 1) # square black frame
-        inner_points=inner_square_points(square_dict,i,d)            # array with the 4 square inner vertex coordinates
-        cv2.fillPoly(collage, pts = [inner_points], color=(B,G,R))   # inner square is colored with bright color of the interpreted one
-        i+=1                                                         # iterator index is increased
-    
+        if HSV_analysis:                                                 # case the detected 6 center facelets have 6 different colors
+            col=cube_color_sequence[std_color_sequence.index(color)]     # from standard color sequence to the one detected, due to cube orientation at start
+            B,G,R = cube_bright_colors[col]                              # BGR values of the bright colors for the corresponding detected color
+            inner_points=inner_square_points(square_dict,i,d)            # array with the 4 square inner vertex coordinates
+            cv2.fillPoly(collage, pts = [inner_points], color=(B,G,R))   # inner square is colored with bright color of the interpreted one
+        else:                                                            # case the detected 6 center facelets do not have 6 different colors
+            cv2.putText(collage, cube_status_string[i], (start_point[0]+int(0.2*d), int(start_point[1]+int(0.8*d))),\
+                        font, fontScale*0.9,(0,0,0),lineType)            # facelets side LETTER is printed on the sketch
     
     
 
@@ -2343,7 +2362,7 @@ def text_font():
 
 
 
-def robot_solve_cube(fixWindPos, screen, frame, faces, cube_status, cube_color_sequence, URFDLB_facelets_BGR_mean,
+def robot_solve_cube(fixWindPos, screen, frame, faces, cube_status, cube_color_sequence, HSV_analysis, URFDLB_facelets_BGR_mean,
                         font, fontScale, lineType, show_time, timestamp, solution, solution_Text, color_detection_winner,
                         cube_status_string, BGR_mean, HSV_detected, start_time, camera_ready_time, cube_detect_time, cube_solution_time):
     
@@ -2382,7 +2401,7 @@ def robot_solve_cube(fixWindPos, screen, frame, faces, cube_status, cube_color_s
                  start_time, camera_ready_time, cube_detect_time, cube_solution_time, robot_solving_time)
         
         # tuple of variables needed for the decoration function
-        deco_info = (fixWindPos, screen, frame, faces, cube_status, cube_color_sequence, \
+        deco_info = (fixWindPos, screen, frame, faces, cube_status, cube_color_sequence, HSV_analysis, cube_status_string, \
                      URFDLB_facelets_BGR_mean, color_detection_winner, show_time, timestamp)
         
         decoration(deco_info)      # calss the decoration function, that shows (or just saves, is screen=False) cube's faces pictures  
@@ -2456,8 +2475,7 @@ def log_data(timestamp, facelets_data, cube_status_string, solution, color_detec
     
     folder = os.path.join('.','CubesDataLog')           # folder to store the relevant cube data
     if not os.path.exists(folder):                      # if case the folder does not exist
-        os.umask(0)                                     # no privileges initially revoked
-        os.makedirs(folder, mode=0o777)                 # folder is made if it doesn't exist
+        os.makedirs(folder)                             # folder is made if it doesn't exist
     
     fname = folder+'/Cubotino_solver_log.txt'           # folder+filename for the cube data
     if not os.path.exists(fname):                       # if case the file does not exist, file with headers is generated
@@ -2477,8 +2495,7 @@ def log_data(timestamp, facelets_data, cube_status_string, solution, color_detec
         s = a+'\t'+b+'\t'+c+'\t'+d+'\t'+e+'\t'+f+'\t'+g+'\t'+h+'\t'+i+'\t'+k+'\n'  # tab separated string of the the headers
         
         # 'a'means: file will be generated if it does not exist, and data will be appended at the end
-        os.umask(0)
-        with open(os.open(fname, os.O_CREAT | os.O_WRONLY, 0o777),'w') as f:    
+        with open(fname,'a') as f:    
             f.write(s)       
 
     
@@ -2496,7 +2513,7 @@ def log_data(timestamp, facelets_data, cube_status_string, solution, color_detec
     k=str(solution)                                                    # solution returned by Kociemba solver
     s = a+'\t'+b+'\t'+c+'\t'+d+'\t'+e+'\t'+f+'\t'+g+'\t'+h+'\t'+i+'\t'+k+'\n'      # tab separated string with info to log
     
-    # 'a'means: data will be appended at the end
+    # 'a'means: file will be generated if it does not exist, and data will be appended at the end
     with open(fname,'a') as f:   # text file is temporary opened
         f.write(s)               # data is appended
 
@@ -2649,7 +2666,7 @@ def time_system_synchr():
     
     if internet:                                        # case internet is available
         from subprocess import Popen, PIPE              # classes importing
-        date_time = dt.datetime.now().strftime('%d/%m/%Y %H:%M:%S') # date_time variable is assigned
+        date_time = dt.datetime.now().strftime('%d/%m/%Y %H:%M:%S') # date_time variable is assigned        
         once = True                                     # variable once is set true, to print a feedback only once
         i = 0                                           # iterator
         while True:                                     # infinite loop              
@@ -2664,9 +2681,9 @@ def time_system_synchr():
                 ps.wait()                                        # waits until the ps child completes
                 
                 if b'yes' in output:                             # case the timedatectl status returns true
-                    print('time system is synchronized: ',date_time)  # feedback is printed to the terminal
+                    print('time system is synchronized')         # feedback is printed to the terminal
                     show_on_display('TIME SYSTEM','UPDATED', fs1=16, sleep=1.5)   # feedback is printed to the display
-                    show_on_display(str(date_time[:10]), str(date_time[11:]), fs1=20, fs2=26, sleep=1.5)
+                    show_on_display(str(date_time[11:]), '', fs1=26)              # feedback is printed to the display
                     break                                        # while loop is interrupted
                 else:                                            # case the timedatectl status returns false
                     if once:                                     # case the variable once is true
@@ -2815,8 +2832,8 @@ def start_up(first_cycle=False):
     if first_cycle:
         time_system_synchr()  # checks the time system status (if internet connected, it waits till synchronization)
 #         cam_led_bright = 0.1           #(AF 0.1)           # set the brighteness on the led at top_cover (admitted 0 to 0.3)
-#         detect_timeout = 40            #(AF 40)            # timeout for the cube status detection (in secs)
-#         show_time = 7                  #(AF 7)             # showing time of the unfolded cube images (cube initial status)
+#         detect_timeout = 40             #(AF 40)            # timeout for the cube status detection (in secs)
+#         show_time = 7                      #(AF 7)             # showing time of the unfolded cube images (cube initial status)
         
         if cv_wow:                                             # case the cv image analysis plot is set true
             detect_timeout = 2 * detect_timeout                # cube status detection timeout is doubled
@@ -2957,8 +2974,9 @@ def cubeAF():
                                 cv2.destroyAllWindows()          # cube window and eventual other open windows are close
                             except:
                                 pass
-
-                        cube_status, HSV_detected, cube_color_seq = cube_colors_interpr(URFDLB_facelets_BGR_mean)  # cube string status with colors detected 
+                        
+                        # cube string status with colors detected 
+                        cube_status, HSV_detected, cube_color_seq, HSV_analysis = cube_colors_interpr(URFDLB_facelets_BGR_mean)
                         cube_status_string = cube_string(cube_status)                 # cube string for the solver
                         solution, solution_Text = cube_solution(cube_status_string)   # Kociemba solver is called to have the solution string
                         color_detection_winner='BGR'                                  # variable used to log which method gave the solution
@@ -2966,12 +2984,12 @@ def cubeAF():
                         print(f'\nCube status (via BGR color distance): {cube_status_string}')   # feedback is printed to the terminal
                         print(f'Camera warm-up, camera setting, cube status (BGR), and solution, in: {round(time.time()-start_time,1)} secs')
                         
-                        # uncoment below row to force HSV color analysis method (this assignes 'Error' to solution_Text variable)
-                        # solution_Text = 'Error'
+################### DEBUG #############             
+#                         solution_Text = 'Error' # uncoment this row to force HSV color analysis method (this assignes 'Error' to solution_Text variable)
+#######################################             
 
                         if solution_Text == 'Error':               # if colors interpretation on BGR color distance fail an attempt is made on HSV
                             print(f'Solver return: {solution}\n')  # feedback is printed to the terminal
-                
                             a, b, c = cube_colors_interpr_HSV(URFDLB_facelets_BGR_mean,HSV_detected) # cube string status with colors detected
                             cube_status, cube_status_HSV, cube_color_seq = a, b, c        # cube string status with colors detected to variables with proper name
                             cube_status_string = cube_string(cube_status)                 # cube string for the solver
@@ -2991,7 +3009,7 @@ def cubeAF():
                         
 
                         # function related to cube solving via the robot
-                        robot_solve_cube(fixWindPos, screen, frame, faces, cube_status, cube_color_seq,
+                        robot_solve_cube(fixWindPos, screen, frame, faces, cube_status, cube_color_seq, HSV_analysis, 
                                             URFDLB_facelets_BGR_mean, font, fontScale, lineType, show_time, timestamp,
                                             solution, solution_Text, color_detection_winner, cube_status_string, BGR_mean,
                                             HSV_detected, start_time, camera_ready_time, cube_detect_time, cube_solution_time) 
@@ -3110,7 +3128,7 @@ if __name__ == "__main__":
     
     print('\nother settings and environment status:')  # feedback is printed to the terminal                
     first_cycle=True                                 # boolean variable to execute some settings only once
-    start_up(first_cycle=first_cycle)                # sets the initial variables, in this case it is the first cycle
+    start_up(first_cycle=first_cycle)                # sets the initial variables, in this case it is the first cycle 
     
     print('\nWaiting for user to start a cycle')     # print on terminal to suggest to press the robot button, to start a cycle
     press_to_start()                                 # request user to touch the button to start a cycle (infinite loop)
